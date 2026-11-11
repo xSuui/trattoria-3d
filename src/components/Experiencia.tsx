@@ -5,6 +5,18 @@
 import { useEffect, useRef, useState } from "react";
 import { Motor, MARCACOES } from "@/trattoria/motor";
 
+// Tenta a versão completa; se o aparelho não aguentar, a leve; se nem assim, avisa.
+function criarMotor(canvas: HTMLCanvasElement, aoFicarPronto: () => void): Motor | null {
+  for (const qualidade of ["completa", "leve"] as const) {
+    try {
+      return new Motor(canvas, { aoFicarPronto }, qualidade);
+    } catch (e) {
+      console.warn(`Não abriu na qualidade ${qualidade}:`, e);
+    }
+  }
+  return null;
+}
+
 const SECOES = [
   { id: "rua", kicker: "São Paulo · desde 1958", titulo: "Trattoria Il Tinello", texto: "Massa fresca, molho de domingo e mesa comprida. Role para entrar." },
   { id: "fachada", kicker: "01 · A esquina", titulo: "Entre. Fique mais um pouco.", texto: "Toldo listrado, oliveiras na porta e o cheiro de manjericão chegando na calçada." },
@@ -21,10 +33,24 @@ export default function Experiencia() {
   const [pronto, setPronto] = useState(false);
   const [modoFoto, setModoFoto] = useState(false);
   const [somLigado, setSomLigado] = useState(false);
+  const [sem3d, setSem3d] = useState(false);
 
   useEffect(() => {
     if (!canvasRef.current) return;
-    const motor = new Motor(canvasRef.current, { aoFicarPronto: () => setPronto(true) });
+    const motor = criarMotor(canvasRef.current, () => setPronto(true));
+    if (!motor) {
+      // sem 3D: mostra todos os textos (normalmente eles aparecem com a rolagem do 3D)
+      setSem3d(true);
+      setPronto(true);
+      secoesRef.current.forEach((s) => {
+        const bloco = s?.querySelector<HTMLElement>(".revelar");
+        if (bloco) {
+          bloco.style.opacity = "1";
+          bloco.style.transform = "none";
+        }
+      });
+      return;
+    }
     motorRef.current = motor;
     const n = MARCACOES.length - 1;
 
@@ -68,6 +94,13 @@ export default function Experiencia() {
     <div className="pagina relative">
       <canvas ref={canvasRef} className="fixed inset-0 h-screen w-screen" />
       <div className="pointer-events-none fixed inset-0 bg-gradient-to-r from-black/55 via-black/10 to-transparent" />
+      {sem3d && (
+        <div className="fixed inset-0 flex items-end justify-end p-6 text-right">
+          <p className="max-w-xs rounded-xl bg-black/50 p-4 font-serif text-sm italic text-[#e9dccb]">
+            Seu navegador não conseguiu abrir o 3D. Tente atualizar a página ou ativar a aceleração de hardware nas configurações do navegador.
+          </p>
+        </div>
+      )}
 
       <div
         className={`fixed inset-0 z-30 flex items-center justify-center bg-[#070a12] transition-opacity duration-700 ${pronto ? "pointer-events-none opacity-0" : "opacity-100"} ${modoFoto ? "hidden" : ""}`}

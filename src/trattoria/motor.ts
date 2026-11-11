@@ -72,6 +72,9 @@ const suave = (t: number) => {
 
 type Eventos = { aoFicarPronto?: () => void };
 
+// "leve": sem sombras, espelho, oclusão e desfoque (para máquinas que não aguentam)
+export type Qualidade = "completa" | "leve";
+
 export class Motor {
   private renderer: THREE.WebGLRenderer;
   private cena = new THREE.Scene();
@@ -80,7 +83,7 @@ export class Motor {
   private bloom: UnrealBloomPass;
   private ao: GTAOPass | null = null;
   private dof: BokehPass;
-  private espelho: Reflector;
+  private espelho: Reflector | null = null;
   private som = new SomDoSalao();
   private cenario: Cenario;
   private caminho: THREE.CatmullRomCurve3;
@@ -98,7 +101,11 @@ export class Motor {
   private quadros = 0;
   private janelaFps = 0;
 
-  constructor(private canvas: HTMLCanvasElement, private eventos: Eventos = {}) {
+  private falhasQuadro = 0;
+  private simples = false; // se o pós-processamento falhar, desenha direto
+
+  constructor(private canvas: HTMLCanvasElement, private eventos: Eventos = {}, private qualidade: Qualidade = "completa") {
+    const leve = qualidade === "leve";
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: "high-performance" });
     this.pixelRatio = Math.min(window.devicePixelRatio, window.innerWidth < 768 ? 1.5 : 1.75);
     this.renderer.setPixelRatio(this.pixelRatio);
@@ -106,7 +113,7 @@ export class Motor {
     this.renderer.toneMappingExposure = 0.95;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     // sombras suaves das lâmpadas
-    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.enabled = !leve;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
 
     this.cena.background = new THREE.Color(0x070a12);
@@ -130,7 +137,9 @@ export class Motor {
       }
     });
 
-    // reflexo espelhado nas poças (renderiza a cena espelhada em meia resolução)
+    // reflexo espelhado nas poças (renderiza a cena espelhada em meia resolução);
+    // opcional: se o aparelho não suportar, a rua fica sem o espelho e o resto segue
+    if (!leve) try {
     const meia = Math.min(window.devicePixelRatio, 1.5) * 0.5;
     this.espelho = new Reflector(new THREE.PlaneGeometry(40, 40), {
       textureWidth: Math.round(window.innerWidth * meia),
@@ -152,6 +161,10 @@ export class Motor {
     this.espelho.position.set(0, 0.004, 14.35);
     this.espelho.userData.semSombra = true;
     this.cena.add(this.espelho);
+    } catch (e) {
+      console.warn("Espelho das poças desligado:", e);
+      this.espelho = null;
+    }
 
     this.caminho = new THREE.CatmullRomCurve3(MARCACOES.map((m) => new THREE.Vector3(...m.pos)), false, "centripetal");
     this.alvos = new THREE.CatmullRomCurve3(MARCACOES.map((m) => new THREE.Vector3(...m.alvo)), false, "centripetal");
@@ -160,16 +173,21 @@ export class Motor {
     this.composer = new EffectComposer(this.renderer, alvoRender);
     this.composer.addPass(new RenderPass(this.cena, this.camera));
     // oclusão de ambiente: cantos, pés de mesa e frestas escurecem (só no computador)
-    if (!celular) {
-      this.ao = new GTAOPass(this.cena, this.camera, 512, 512);
-      this.ao.updateGtaoMaterial({ radius: 0.35, distanceExponent: 1.2, thickness: 1, scale: 1.2 });
-      this.ao.blendIntensity = 0.85;
-      this.composer.addPass(this.ao);
+    if (!celular && !leve) {
+      try {
+        this.ao = new GTAOPass(this.cena, this.camera, 512, 512);
+        this.ao.updateGtaoMaterial({ radius: 0.35, distanceExponent: 1.2, thickness: 1, scale: 1.2 });
+        this.ao.blendIntensity = 0.85;
+        this.composer.addPass(this.ao);
+      } catch (e) {
+        console.warn("Oclusão de ambiente desligada:", e);
+        this.ao = null;
+      }
     }
     // desfoque de lente no cardápio (o fundo fica fora de foco, como foto)
     this.dof = new BokehPass(this.cena, this.camera, { focus: 1, aperture: 0, maxblur: 0.008 });
     this.dof.enabled = false;
-    this.composer.addPass(this.dof);
+    if (!leve) this.composer.addPass(this.dof);
     // aqui o bloom é bem-vindo: as lâmpadas devem brilhar
     this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.45, 0.35, 1.6);
     this.composer.addPass(this.bloom);
@@ -285,7 +303,7 @@ export class Motor {
     this.camera.lookAt(alvo);
     // foco no cardápio quando a câmera chega perto dele
     const focoCardapio = suave((pertoCardapio - 0.35) / 0.65);
-    this.dof.enabled = focoCardapio > 0.02;
+    this.dof.enabled = this.qualidade === "completa" && focoCardapio > 0.02;
     if (this.dof.enabled) {
       const u = this.dof.uniforms as Record<string, { value: number }>;
       u.focus.value = pos.distanceTo(this.cenario.cardapio.position);
@@ -302,7 +320,7 @@ export class Motor {
     const dentro = suave((-pos.z + 0.5) / 2);
     (this.cena.fog as THREE.FogExp2).density = 0.022 * (1 - dentro) + 0.006 * dentro;
     // dentro do salão o espelho da rua não aparece: desliga e economiza um render
-    this.espelho.visible = pos.z > -1.5;
+    if (this.espelho) this.espelho.visible = pos.z > -1.5;
     this.som.atualizar(dentro);
 
     // página do cardápio (vira suave)
@@ -310,7 +328,18 @@ export class Motor {
     pv.valor += (this.virarAlvo - pv.valor) * (1 - Math.exp(-dt * 5));
     this.cenario.animar.forEach((fn) => fn(this.tempo));
 
-    this.composer.render(dt);
+    try {
+      if (this.simples) this.renderer.render(this.cena, this.camera);
+      else this.composer.render(dt);
+      this.falhasQuadro = 0;
+    } catch (e) {
+      this.falhasQuadro++;
+      console.warn("Falha ao desenhar o quadro:", e);
+      if (this.falhasQuadro > 2) {
+        this.simples = true;
+        if (this.espelho) this.espelho.visible = false;
+      }
+    }
     this.medirFps(dt);
   };
 
