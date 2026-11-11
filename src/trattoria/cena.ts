@@ -25,6 +25,25 @@ function torno(perfil: [number, number][], seg = 32) {
 }
 
 // Lâmpada: bulbo que brilha + luz pontual de verdade (opcional)
+// Cone de luz atravessando a névoa: some suavemente para baixo e nas bordas
+function coneDeLuz(x: number, y: number, z: number, altura: number, raio: number) {
+  const geo = new THREE.ConeGeometry(raio, altura, 32, 1, true);
+  geo.translate(0, -altura / 2, 0);
+  const mat = new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    side: THREE.DoubleSide,
+    uniforms: { cor: { value: new THREE.Color(LUZ_QUENTE) }, altura: { value: altura } },
+    vertexShader: "varying float vy; varying vec3 vn; varying vec3 vv; uniform float altura; void main(){ vy = -position.y / altura; vec4 mv = modelViewMatrix * vec4(position,1.0); vn = normalize(normalMatrix * normal); vv = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }",
+    fragmentShader: "uniform vec3 cor; varying float vy; varying vec3 vn; varying vec3 vv; void main(){ float borda = pow(clamp(abs(dot(vn, vv)), 0.0, 1.0), 1.6); float queda = pow(clamp(1.0 - vy, 0.0, 1.0), 1.8); gl_FragColor = vec4(cor * 0.16 * borda * queda, 1.0); }",
+  });
+  const cone = new THREE.Mesh(geo, mat);
+  cone.position.set(x, y, z);
+  cone.userData.semSombra = true;
+  return cone;
+}
+
 function lampada(raio: number, intensidade: number, comLuz: boolean, distancia = 7) {
   const g = new THREE.Group();
   const bulbo = new THREE.Mesh(
@@ -45,12 +64,14 @@ export function criarCenario(): Cenario {
 
   // ---------- materiais ----------
   const texTijolo = T.tijolo();
-  const tijolo = new THREE.MeshStandardMaterial({ map: texTijolo, roughness: 0.9 });
+  const tijolo = new THREE.MeshStandardMaterial({ map: texTijolo.map, bumpMap: texTijolo.bump, bumpScale: 4, roughness: 0.9 });
   const ped = T.pedras();
-  const rua = new THREE.MeshStandardMaterial({ map: ped.map, roughnessMap: ped.roughnessMap, roughness: 1, metalness: 0.1, envMapIntensity: 1.4 });
-  const piso = new THREE.MeshStandardMaterial({ map: T.madeira(), roughness: 0.45 });
+  const rua = new THREE.MeshStandardMaterial({ map: ped.map, roughnessMap: ped.roughnessMap, bumpMap: ped.bump, bumpScale: 6, roughness: 1, metalness: 0.1, envMapIntensity: 1.6 });
+  const texPiso = T.madeira();
+  const piso = new THREE.MeshStandardMaterial({ map: texPiso, bumpMap: texPiso, bumpScale: 1.2, roughness: 0.42 });
   const madeiraEscura = new THREE.MeshStandardMaterial({ map: T.madeira("#2e1c10"), roughness: 0.6 });
-  const rebocoQuente = new THREE.MeshStandardMaterial({ map: T.reboco("#b88a5e"), roughness: 0.95 });
+  const texReboco = T.reboco("#b88a5e");
+  const rebocoQuente = new THREE.MeshStandardMaterial({ map: texReboco, bumpMap: texReboco, bumpScale: 2.5, roughness: 0.95 });
   const toalha = new THREE.MeshStandardMaterial({ color: 0xf3efe6, roughness: 0.92 });
   const verdeVeneziana = new THREE.MeshStandardMaterial({ color: 0x2f4a36, roughness: 0.7 });
   const ferro = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.5, metalness: 0.8 });
@@ -207,7 +228,22 @@ export function criarCenario(): Cenario {
     [-5, 9],
     [5, 9],
   ];
-  postes.forEach(([x, z]) => grupo.add(malha(new THREE.CylinderGeometry(0.05, 0.07, 4.2, 10), ferro, x, 2.1, z)));
+  postes.forEach(([x, z]) => {
+    grupo.add(malha(new THREE.CylinderGeometry(0.05, 0.07, 4.2, 10), ferro, x, 2.1, z));
+    // lampião no alto + cone de luz visível na névoa + luz que faz sombra
+    const lampiao = malha(new THREE.CylinderGeometry(0.12, 0.2, 0.32, 6), ferro, x, 4.4, z);
+    grupo.add(lampiao);
+    const chamaLampiao = lampada(0.07, 0, false);
+    chamaLampiao.position.set(x, 4.3, z);
+    grupo.add(chamaLampiao);
+    grupo.add(coneDeLuz(x, 4.25, z, 4.1, 1.9));
+    const spot = new THREE.SpotLight(LUZ_QUENTE, 30, 12, 0.75, 0.6, 2);
+    spot.position.set(x, 4.25, z);
+    spot.target.position.set(x, 0, z);
+    spot.castShadow = true;
+    spot.userData.sombra = true;
+    grupo.add(spot, spot.target);
+  });
   const fios: [THREE.Vector3, THREE.Vector3][] = [
     [new THREE.Vector3(-4.4, 4.3, 0.1), new THREE.Vector3(5, 4.1, 9)],
     [new THREE.Vector3(4.4, 4.3, 0.1), new THREE.Vector3(-5, 4.1, 9)],
@@ -312,9 +348,17 @@ export function criarCenario(): Cenario {
     const cupula = malha(torno([[0.05, 0], [0.24, -0.22], [0.25, -0.24]], 32), latao, 0, -1.3, 0);
     (cupula.material as THREE.MeshStandardMaterial).side = THREE.DoubleSide;
     pend.add(cupula);
-    const bulbo = lampada(0.05, comLuz ? 6 : 0, comLuz, 6);
+    const bulbo = lampada(0.05, comLuz ? 3 : 0, comLuz, 6);
     bulbo.position.y = -1.48;
     pend.add(bulbo);
+    if (comLuz) {
+      const spot = new THREE.SpotLight(LUZ_QUENTE, 9, 6, 1.0, 0.7, 2);
+      spot.position.set(0, -1.45, 0);
+      spot.target.position.set(0, -3.75, 0);
+      spot.castShadow = true;
+      spot.userData.sombra = true;
+      pend.add(spot, spot.target);
+    }
     g.add(pend);
     grupo.add(g);
   };
@@ -324,6 +368,21 @@ export function criarCenario(): Cenario {
   mesa(0, -4.3, true);
   mesa(2.4, -6.2, true);
   mesa(-1.2, -8.4, false);
+
+  // quadros antigos nas paredes (molduras escuras com "fotos" sépia)
+  const sepia = (seed: number) =>
+    T.placa({
+      w: 256, h: 320, fundo: ["#6e5536", "#5c4a33", "#7a6142"][seed % 3],
+      linhas: [{ texto: ["Roma 1958", "La famiglia", "Napoli"][seed % 3], fonte: "italic 26px Georgia, serif", cor: "rgba(240,225,200,0.7)", y: 0.88 }],
+    });
+  [[-4.38, 1.9, -3.2], [-4.38, 2.1, -7.4], [4.38, 2.0, -4.6]].forEach(([x, y, z], i) => {
+    const q = new THREE.Group();
+    q.position.set(x, y, z);
+    q.rotation.y = x < 0 ? Math.PI / 2 : -Math.PI / 2;
+    q.add(malha(new THREE.BoxGeometry(0.7, 0.86, 0.04), madeiraEscura));
+    q.add(malha(new THREE.PlaneGeometry(0.56, 0.7), new THREE.MeshStandardMaterial({ map: sepia(i), roughness: 0.6 }), 0, 0, 0.025));
+    grupo.add(q);
+  });
 
   // balcão com garrafas no fundo
   grupo.add(malha(new THREE.BoxGeometry(3.4, 1.05, 0.6), madeiraEscura, 2.2, 0.68, -9.6));

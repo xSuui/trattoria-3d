@@ -27,6 +27,9 @@ const aleatorio = (() => {
 // Tijolo à vista: 1 textura = 2 m x 2 m
 export function tijolo() {
   const { c, g } = tela(1024, 1024);
+  const rel = tela(1024, 1024); // relevo: argamassa funda (preto), tijolo alto (claro)
+  rel.g.fillStyle = "#000";
+  rel.g.fillRect(0, 0, 1024, 1024);
   g.fillStyle = "#6b5a4c"; // argamassa
   g.fillRect(0, 0, 1024, 1024);
   const altura = 1024 / 28;
@@ -40,13 +43,21 @@ export function tijolo() {
       const b = 40 + aleatorio() * 18;
       g.fillStyle = `rgb(${r},${gg},${b})`;
       g.fillRect(x + desloc + 2, y + 2, largura - 4, altura - 4);
+      const cl = 170 + aleatorio() * 60;
+      rel.g.fillStyle = `rgb(${cl},${cl},${cl})`;
+      rel.g.fillRect(x + desloc + 4, y + 4, largura - 8, altura - 8);
+      for (let k = 0; k < 6; k++) {
+        rel.g.fillStyle = `rgba(0,0,0,${aleatorio() * 0.5})`;
+        rel.g.fillRect(x + desloc + 4 + aleatorio() * (largura - 12), y + 4 + aleatorio() * (altura - 10), 3 + aleatorio() * 8, 2 + aleatorio() * 4);
+      }
       g.fillStyle = `rgba(0,0,0,${aleatorio() * 0.18})`;
       g.fillRect(x + desloc + 2, y + altura * 0.6, largura - 4, altura * 0.4 - 2);
     }
   }
-  const t = textura(c);
-  t.repeat.set(0.5, 0.5);
-  return t;
+  const map = textura(c);
+  const bump = textura(rel.c, false);
+  [map, bump].forEach((t) => t.repeat.set(0.5, 0.5));
+  return { map, bump };
 }
 
 // Reboco antigo (prédios vizinhos e paredes de dentro)
@@ -70,6 +81,9 @@ export function reboco(base: string) {
 export function pedras() {
   const cor = tela(1024, 1024);
   const rug = tela(1024, 1024);
+  const rel = tela(1024, 1024);
+  rel.g.fillStyle = "#000";
+  rel.g.fillRect(0, 0, 1024, 1024);
   cor.g.fillStyle = "#1c1b1a";
   cor.g.fillRect(0, 0, 1024, 1024);
   rug.g.fillStyle = "#9a9a9a";
@@ -85,6 +99,14 @@ export function pedras() {
       cor.g.beginPath();
       cor.g.roundRect(x + desloc + 3, y + 3, w, h, 14);
       cor.g.fill();
+      // pedra abaulada: centro mais alto
+      const gr = rel.g.createRadialGradient(x + desloc + 3 + w / 2, y + 3 + h / 2, 2, x + desloc + 3 + w / 2, y + 3 + h / 2, w * 0.62);
+      gr.addColorStop(0, "#fff");
+      gr.addColorStop(1, "#555");
+      rel.g.fillStyle = gr;
+      rel.g.beginPath();
+      rel.g.roundRect(x + desloc + 3, y + 3, w, h, 14);
+      rel.g.fill();
       const rv = 70 + aleatorio() * 60;
       rug.g.fillStyle = `rgb(${rv},${rv},${rv})`;
       rug.g.beginPath();
@@ -105,8 +127,9 @@ export function pedras() {
   }
   const map = textura(cor.c);
   const roughnessMap = textura(rug.c, false);
-  [map, roughnessMap].forEach((t) => t.repeat.set(0.35, 0.35));
-  return { map, roughnessMap };
+  const bump = textura(rel.c, false);
+  [map, roughnessMap, bump].forEach((t) => t.repeat.set(0.35, 0.35));
+  return { map, roughnessMap, bump };
 }
 
 // Tábuas do piso do salão

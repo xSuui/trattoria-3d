@@ -6,6 +6,10 @@ import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { FilmPass } from "three/examples/jsm/postprocessing/FilmPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
+import { GTAOPass } from "three/examples/jsm/postprocessing/GTAOPass.js";
+import { BokehPass } from "three/examples/jsm/postprocessing/BokehPass.js";
+import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
+import { VignetteShader } from "three/examples/jsm/shaders/VignetteShader.js";
 import { criarCenario, type Cenario } from "./cena";
 
 // Marcações do caminho: onde a câmera está e para onde olha
@@ -32,6 +36,8 @@ export class Motor {
   private camera = new THREE.PerspectiveCamera(45, 1, 0.05, 200);
   private composer: EffectComposer;
   private bloom: UnrealBloomPass;
+  private ao: GTAOPass | null = null;
+  private dof: BokehPass;
   private cenario: Cenario;
   private caminho: THREE.CatmullRomCurve3;
   private alvos: THREE.CatmullRomCurve3;
@@ -55,6 +61,9 @@ export class Motor {
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 0.95;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    // sombras suaves das lâmpadas
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
     this.cena.background = new THREE.Color(0x070a12);
     this.cena.fog = new THREE.FogExp2(0x0b0f1a, 0.022);
@@ -62,6 +71,20 @@ export class Motor {
 
     this.cenario = criarCenario();
     this.cena.add(this.cenario.grupo);
+    const celular = window.innerWidth < 768;
+    this.cenario.grupo.traverse((o) => {
+      if (o instanceof THREE.Mesh && !o.userData.semSombra) {
+        const m = o.material as THREE.Material;
+        const brilha = m instanceof THREE.MeshBasicMaterial || m instanceof THREE.ShaderMaterial || m.transparent;
+        o.castShadow = !brilha;
+        o.receiveShadow = !brilha;
+      }
+      if (o instanceof THREE.SpotLight && o.userData.sombra) {
+        o.shadow.mapSize.set(celular ? 512 : 1024, celular ? 512 : 1024);
+        o.shadow.bias = -0.0008;
+        o.shadow.radius = 4;
+      }
+    });
 
     this.caminho = new THREE.CatmullRomCurve3(MARCACOES.map((m) => new THREE.Vector3(...m.pos)), false, "centripetal");
     this.alvos = new THREE.CatmullRomCurve3(MARCACOES.map((m) => new THREE.Vector3(...m.alvo)), false, "centripetal");
@@ -69,10 +92,25 @@ export class Motor {
     const alvoRender = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4 });
     this.composer = new EffectComposer(this.renderer, alvoRender);
     this.composer.addPass(new RenderPass(this.cena, this.camera));
+    // oclusão de ambiente: cantos, pés de mesa e frestas escurecem (só no computador)
+    if (!celular) {
+      this.ao = new GTAOPass(this.cena, this.camera, 512, 512);
+      this.ao.updateGtaoMaterial({ radius: 0.35, distanceExponent: 1.2, thickness: 1, scale: 1.2 });
+      this.ao.blendIntensity = 0.85;
+      this.composer.addPass(this.ao);
+    }
+    // desfoque de lente no cardápio (o fundo fica fora de foco, como foto)
+    this.dof = new BokehPass(this.cena, this.camera, { focus: 1, aperture: 0, maxblur: 0.008 });
+    this.dof.enabled = false;
+    this.composer.addPass(this.dof);
     // aqui o bloom é bem-vindo: as lâmpadas devem brilhar
     this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.45, 0.35, 1.6);
     this.composer.addPass(this.bloom);
     this.composer.addPass(new FilmPass(0.25, false));
+    const vinheta = new ShaderPass(VignetteShader);
+    vinheta.uniforms.offset.value = 1.0;
+    vinheta.uniforms.darkness.value = 1.0; // mistura com preto (acima de 1 vira cor negativa)
+    this.composer.addPass(vinheta);
     this.composer.addPass(new OutputPass());
 
     this.redimensionar();
@@ -175,6 +213,14 @@ export class Motor {
     }
     this.camera.position.copy(pos);
     this.camera.lookAt(alvo);
+    // foco no cardápio quando a câmera chega perto dele
+    const focoCardapio = suave((pertoCardapio - 0.35) / 0.65);
+    this.dof.enabled = focoCardapio > 0.02;
+    if (this.dof.enabled) {
+      const u = this.dof.uniforms as Record<string, { value: number }>;
+      u.focus.value = pos.distanceTo(this.cenario.cardapio.position);
+      u.aperture.value = 0.0045 * focoCardapio;
+    }
     // fov interpolado entre as marcações
     const seg = t * (MARCACOES.length - 1);
     const i = Math.min(MARCACOES.length - 2, Math.floor(seg));
@@ -204,6 +250,8 @@ export class Motor {
         this.pixelRatio = Math.max(1, this.pixelRatio - 0.25);
         this.renderer.setPixelRatio(this.pixelRatio);
         this.redimensionar();
+      } else if (fps < 40 && this.ao && this.ao.enabled) {
+        this.ao.enabled = false; // o mais pesado sai primeiro
       } else if (fps < 40 && this.bloom.enabled) {
         this.bloom.enabled = false;
       }
