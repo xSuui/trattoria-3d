@@ -24,6 +24,18 @@ const aleatorio = (() => {
   };
 })();
 
+// Retângulo arredondado sem depender de ctx.roundRect (que só existe no
+// Firefox 112+ e Safari 16+): navegadores mais antigos quebravam a página
+function arredondado(g: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+  const rr = Math.min(r, w / 2, h / 2);
+  g.moveTo(x + rr, y);
+  g.arcTo(x + w, y, x + w, y + h, rr);
+  g.arcTo(x + w, y + h, x, y + h, rr);
+  g.arcTo(x, y + h, x, y, rr);
+  g.arcTo(x, y, x + w, y, rr);
+  g.closePath();
+}
+
 // Tijolo à vista: 1 textura = 2 m x 2 m
 export function tijolo() {
   const { c, g } = tela(1024, 1024);
@@ -97,7 +109,7 @@ export function pedras() {
       const w = tam * (0.82 + aleatorio() * 0.1);
       const h = tam * 0.8 * (0.8 + aleatorio() * 0.1);
       cor.g.beginPath();
-      cor.g.roundRect(x + desloc + 3, y + 3, w, h, 14);
+      arredondado(cor.g, x + desloc + 3, y + 3, w, h, 14);
       cor.g.fill();
       // pedra abaulada: centro mais alto
       const gr = rel.g.createRadialGradient(x + desloc + 3 + w / 2, y + 3 + h / 2, 2, x + desloc + 3 + w / 2, y + 3 + h / 2, w * 0.62);
@@ -105,12 +117,12 @@ export function pedras() {
       gr.addColorStop(1, "#555");
       rel.g.fillStyle = gr;
       rel.g.beginPath();
-      rel.g.roundRect(x + desloc + 3, y + 3, w, h, 14);
+      arredondado(rel.g, x + desloc + 3, y + 3, w, h, 14);
       rel.g.fill();
       const rv = 70 + aleatorio() * 60;
       rug.g.fillStyle = `rgb(${rv},${rv},${rv})`;
       rug.g.beginPath();
-      rug.g.roundRect(x + desloc + 3, y + 3, w, h, 14);
+      arredondado(rug.g, x + desloc + 3, y + 3, w, h, 14);
       rug.g.fill();
     }
   }
