@@ -1,0 +1,47 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+html,
+body {
+  background: #070a12;
+  color: #ededed;
+}
+
+/* Pegadinha do guia: "hidden" quebra o position: sticky; "clip" não */
+.pagina {
+  overflow-x: clip;
+}
+
+.rotulo {
+  position: absolute;
+  left: 0;
+  top: 0;
+  font-family: var(--font-geist-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #d9dde3;
+  white-space: nowrap;
+  padding: 3px 7px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(10, 10, 11, 0.55);
+  backdrop-filter: blur(4px);
+  pointer-events: none;
+  opacity: 0;
+}
+
+.rotulo-linha {
+  stroke: #9fb3c8;
+  stroke-width: 1;
+  opacity: 0;
+}
+
+.revelar {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: none;
+}
