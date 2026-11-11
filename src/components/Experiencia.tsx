@@ -9,7 +9,7 @@ const SECOES = [
   { id: "rua", kicker: "São Paulo · desde 1958", titulo: "Trattoria Il Tinello", texto: "Massa fresca, molho de domingo e mesa comprida. Role para entrar." },
   { id: "fachada", kicker: "01 · A esquina", titulo: "Entre. Fique mais um pouco.", texto: "Toldo listrado, oliveiras na porta e o cheiro de manjericão chegando na calçada." },
   { id: "porta", kicker: "02 · A porta", titulo: "A casa é sua.", texto: "Aqui ninguém tem pressa. A massa é aberta à mão toda manhã." },
-  { id: "salao", kicker: "03 · O salão", titulo: "Benvenuti.", texto: "Toalha branca, luz baixa, vinho da casa. Do jeito que a nonna fazia." },
+  { id: "salao", kicker: "03 · O salão", titulo: "Benvenuti.", texto: "Toalha xadrez, luz baixa, vinho da casa e conversa alta. Do jeito que a nonna fazia." },
   { id: "cardapio", kicker: "04 · O cardápio", titulo: "Il menù.", texto: "Clássicos romanos e do norte, com ingredientes de pequenos produtores." },
   { id: "reserva", kicker: "05 · Reservas", titulo: "Aperto.", texto: "" },
 ];
@@ -20,6 +20,7 @@ export default function Experiencia() {
   const secoesRef = useRef<(HTMLElement | null)[]>([]);
   const [pronto, setPronto] = useState(false);
   const [modoFoto, setModoFoto] = useState(false);
+  const [somLigado, setSomLigado] = useState(false);
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -88,6 +89,15 @@ export default function Experiencia() {
               <p className="mb-3 font-mono text-[11px] tracking-[0.25em] text-[#e7b9a1] uppercase">{s.kicker}</p>
               <h2 className={`mb-4 font-serif leading-tight text-[#f7ecd8] ${i === 0 ? "text-5xl italic md:text-7xl" : "text-4xl md:text-5xl"}`}>{s.titulo}</h2>
               {s.texto && <p className="text-base leading-relaxed text-[#e9dccb]">{s.texto}</p>}
+
+              {s.id === "salao" && (
+                <button
+                  onClick={() => setSomLigado(motorRef.current?.alternarSom() ?? false)}
+                  className="mt-8 rounded-full border border-[#f2e3c2]/40 bg-black/30 px-6 py-3 font-mono text-xs tracking-[0.2em] text-[#f7ecd8] uppercase backdrop-blur"
+                >
+                  {somLigado ? "Desligar o som do salão" : "Ouvir o salão"}
+                </button>
+              )}
 
               {s.id === "cardapio" && (
                 <button

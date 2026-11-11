@@ -10,7 +10,49 @@ import { GTAOPass } from "three/examples/jsm/postprocessing/GTAOPass.js";
 import { BokehPass } from "three/examples/jsm/postprocessing/BokehPass.js";
 import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 import { VignetteShader } from "three/examples/jsm/shaders/VignetteShader.js";
+import { Reflector } from "three/examples/jsm/objects/Reflector.js";
 import { criarCenario, type Cenario } from "./cena";
+import { SomDoSalao } from "./vida";
+import { mascaraPocas, pedras } from "./texturas";
+
+// Espelho só onde há poça: a máscara diz onde tem água e o relevo das pedras
+// ondula um pouco o reflexo
+const ShaderPoca = {
+  name: "ShaderPoca",
+  uniforms: {
+    color: { value: null },
+    tDiffuse: { value: null },
+    textureMatrix: { value: null },
+    mascara: { value: null },
+    relevo: { value: null },
+  },
+  vertexShader: `
+    uniform mat4 textureMatrix;
+    varying vec4 vUv;
+    varying vec2 vMundo;
+    void main() {
+      vUv = textureMatrix * vec4(position, 1.0);
+      vMundo = (modelMatrix * vec4(position, 1.0)).xz;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }`,
+  fragmentShader: `
+    uniform vec3 color;
+    uniform sampler2D tDiffuse;
+    uniform sampler2D mascara;
+    uniform sampler2D relevo;
+    varying vec4 vUv;
+    varying vec2 vMundo;
+    void main() {
+      float agua = texture2D(mascara, vMundo / 22.0).r;
+      float pedra = texture2D(relevo, vMundo / 3.0).r;
+      // fora da poça, só um brilho fraco de pedra molhada; dentro, espelho
+      float forca = mix(0.12 * (1.0 - pedra), 0.85, smoothstep(0.15, 0.7, agua));
+      vec4 uv = vUv;
+      uv.xy += (pedra - 0.5) * 0.035 * (1.0 - agua * 0.8) * uv.w;
+      vec3 refl = texture2DProj(tDiffuse, uv).rgb;
+      gl_FragColor = vec4(refl * color, forca);
+    }`,
+};
 
 // Marcações do caminho: onde a câmera está e para onde olha
 type Marcacao = { pos: [number, number, number]; alvo: [number, number, number]; fov: number };
@@ -38,6 +80,8 @@ export class Motor {
   private bloom: UnrealBloomPass;
   private ao: GTAOPass | null = null;
   private dof: BokehPass;
+  private espelho: Reflector;
+  private som = new SomDoSalao();
   private cenario: Cenario;
   private caminho: THREE.CatmullRomCurve3;
   private alvos: THREE.CatmullRomCurve3;
@@ -85,6 +129,29 @@ export class Motor {
         o.shadow.radius = 4;
       }
     });
+
+    // reflexo espelhado nas poças (renderiza a cena espelhada em meia resolução)
+    const meia = Math.min(window.devicePixelRatio, 1.5) * 0.5;
+    this.espelho = new Reflector(new THREE.PlaneGeometry(40, 40), {
+      textureWidth: Math.round(window.innerWidth * meia),
+      textureHeight: Math.round(window.innerHeight * meia),
+      color: 0xb8b0a6,
+      clipBias: 0.003,
+      shader: ShaderPoca,
+      multisample: 0,
+    });
+    const matEspelho = this.espelho.material as THREE.ShaderMaterial;
+    matEspelho.transparent = true;
+    matEspelho.depthWrite = false;
+    const texMascara = mascaraPocas();
+    const texRelevo = pedras().bump;
+    texRelevo.repeat.set(1, 1);
+    matEspelho.uniforms.mascara.value = texMascara;
+    matEspelho.uniforms.relevo.value = texRelevo;
+    this.espelho.rotation.x = -Math.PI / 2;
+    this.espelho.position.set(0, 0.004, 14.35);
+    this.espelho.userData.semSombra = true;
+    this.cena.add(this.espelho);
 
     this.caminho = new THREE.CatmullRomCurve3(MARCACOES.map((m) => new THREE.Vector3(...m.pos)), false, "centripetal");
     this.alvos = new THREE.CatmullRomCurve3(MARCACOES.map((m) => new THREE.Vector3(...m.alvo)), false, "centripetal");
@@ -162,6 +229,9 @@ export class Motor {
     this.progressoSuave = this.progresso;
     this.fixo = true;
   }
+  alternarSom() {
+    return this.som.alternar();
+  }
   virarPagina() {
     this.virarAlvo = this.virarAlvo ? 0 : 1;
   }
@@ -231,6 +301,9 @@ export class Motor {
     // neblina mais densa na rua, quase nenhuma dentro
     const dentro = suave((-pos.z + 0.5) / 2);
     (this.cena.fog as THREE.FogExp2).density = 0.022 * (1 - dentro) + 0.006 * dentro;
+    // dentro do salão o espelho da rua não aparece: desliga e economiza um render
+    this.espelho.visible = pos.z > -1.5;
+    this.som.atualizar(dentro);
 
     // página do cardápio (vira suave)
     const pv = this.cenario.paginaVirada;

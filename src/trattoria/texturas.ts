@@ -256,3 +256,47 @@ export function paginaCardapio(titulo: string, secoes: { nome: string; pratos: P
   g.fillText("Buon appetito!", 512, 1350);
   return textura(c, true, false);
 }
+
+// Toalha xadrez vermelho e branco (trama com fios)
+export function xadrez() {
+  const { c, g } = tela(256, 256);
+  g.fillStyle = "#f1ece2";
+  g.fillRect(0, 0, 256, 256);
+  g.fillStyle = "rgba(160,26,30,0.55)";
+  for (let i = 0; i < 256; i += 64) {
+    g.fillRect(i, 0, 32, 256);
+    g.fillRect(0, i, 256, 32);
+  }
+  for (let i = 0; i < 600; i++) {
+    g.fillStyle = `rgba(0,0,0,${aleatorio() * 0.05})`;
+    g.fillRect(aleatorio() * 256, 0, 1, 256);
+  }
+  return textura(c);
+}
+
+// Máscara das poças (branco = água), para o reflexo espelhado
+export function mascaraPocas() {
+  const { c, g } = tela(1024, 1024);
+  g.fillStyle = "#000";
+  g.fillRect(0, 0, 1024, 1024);
+  for (let i = 0; i < 22; i++) {
+    const x = aleatorio() * 1024;
+    const y = aleatorio() * 1024;
+    const rx = 50 + aleatorio() * 150;
+    const ry = rx * (0.35 + aleatorio() * 0.4);
+    g.save();
+    g.translate(x, y);
+    g.rotate(aleatorio() * Math.PI);
+    const gr = g.createRadialGradient(0, 0, 0, 0, 0, rx);
+    gr.addColorStop(0, "rgba(255,255,255,1)");
+    gr.addColorStop(0.65, "rgba(255,255,255,0.85)");
+    gr.addColorStop(1, "rgba(255,255,255,0)");
+    g.scale(1, ry / rx);
+    g.fillStyle = gr;
+    g.beginPath();
+    g.arc(0, 0, rx, 0, Math.PI * 2);
+    g.fill();
+    g.restore();
+  }
+  return textura(c, false);
+}

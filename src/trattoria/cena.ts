@@ -2,6 +2,17 @@
 // A fachada fica em z = 0 olhando para +Z (a rua); o salão vai de z = 0 a z = -10.
 import * as THREE from "three";
 import * as T from "./texturas";
+import { criarVida, type Mesa } from "./vida";
+
+// Mesas do salão: posição, se tem luminária acesa e quais lugares estão ocupados
+export const MESAS: Mesa[] = [
+  { x: -2.4, z: -2.6, luz: true, ocupada: [true, true] },
+  { x: 2.4, z: -2.6, luz: false, ocupada: [true, true] },
+  { x: -2.4, z: -6.0, luz: false, ocupada: [false, true] },
+  { x: 0, z: -4.3, luz: true, ocupada: [true, false] },
+  { x: 2.4, z: -6.2, luz: true, ocupada: [true, true] },
+  { x: -1.2, z: -8.4, luz: false, ocupada: [false, false] },
+];
 
 type Animavel = (tempo: number) => void;
 
@@ -66,13 +77,21 @@ export function criarCenario(): Cenario {
   const texTijolo = T.tijolo();
   const tijolo = new THREE.MeshStandardMaterial({ map: texTijolo.map, bumpMap: texTijolo.bump, bumpScale: 4, roughness: 0.9 });
   const ped = T.pedras();
+  // 1 textura = 3 m (antes a pedra saía com metros de largura)
+  [ped.map, ped.roughnessMap, ped.bump].forEach((t) => t.repeat.set(13, 13));
   const rua = new THREE.MeshStandardMaterial({ map: ped.map, roughnessMap: ped.roughnessMap, bumpMap: ped.bump, bumpScale: 6, roughness: 1, metalness: 0.1, envMapIntensity: 1.6 });
   const texPiso = T.madeira();
+  texPiso.repeat.set(3, 3);
   const piso = new THREE.MeshStandardMaterial({ map: texPiso, bumpMap: texPiso, bumpScale: 1.2, roughness: 0.42 });
   const madeiraEscura = new THREE.MeshStandardMaterial({ map: T.madeira("#2e1c10"), roughness: 0.6 });
   const texReboco = T.reboco("#b88a5e");
   const rebocoQuente = new THREE.MeshStandardMaterial({ map: texReboco, bumpMap: texReboco, bumpScale: 2.5, roughness: 0.95 });
-  const toalha = new THREE.MeshStandardMaterial({ color: 0xf3efe6, roughness: 0.92 });
+  const texToalha = T.xadrez();
+  texToalha.repeat.set(6, 1);
+  const toalha = new THREE.MeshStandardMaterial({ map: texToalha, roughness: 0.92 });
+  const texTampo = T.xadrez();
+  texTampo.repeat.set(2.5, 2.5);
+  const toalhaTampo = new THREE.MeshStandardMaterial({ map: texTampo, roughness: 0.92 });
   const verdeVeneziana = new THREE.MeshStandardMaterial({ color: 0x2f4a36, roughness: 0.7 });
   const ferro = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.5, metalness: 0.8 });
   const latao = new THREE.MeshStandardMaterial({ color: 0xc8963e, roughness: 0.3, metalness: 1 });
@@ -320,7 +339,7 @@ export function criarCenario(): Cenario {
     const g = new THREE.Group();
     g.position.set(x, 0.15, z);
     g.add(malha(new THREE.CylinderGeometry(0.56, 0.6, 0.32, 40, 1, true), toalha, 0, 0.6, 0));
-    g.add(malha(new THREE.CylinderGeometry(0.56, 0.56, 0.02, 40), toalha, 0, 0.76, 0));
+    g.add(malha(new THREE.CylinderGeometry(0.56, 0.56, 0.02, 40), toalhaTampo, 0, 0.76, 0));
     [0, Math.PI].forEach((a) => {
       const c = new THREE.Group();
       c.position.set(Math.sin(a) * 0.85, 0, Math.cos(a) * 0.85);
@@ -362,12 +381,9 @@ export function criarCenario(): Cenario {
     g.add(pend);
     grupo.add(g);
   };
-  mesa(-2.4, -2.6, true);
-  mesa(2.4, -2.6, false);
-  mesa(-2.4, -6.0, false);
-  mesa(0, -4.3, true);
-  mesa(2.4, -6.2, true);
-  mesa(-1.2, -8.4, false);
+  MESAS.forEach((m) => mesa(m.x, m.z, m.luz));
+  const vida = criarVida(grupo, MESAS);
+  animar.push(...vida.animar);
 
   // quadros antigos nas paredes (molduras escuras com "fotos" sépia)
   const sepia = (seed: number) =>
