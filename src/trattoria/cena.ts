@@ -3,6 +3,7 @@
 import * as THREE from "three";
 import * as T from "./texturas";
 import { criarVida, type Mesa } from "./vida";
+import { oliveira, vespa, floreira, sujeiraFachada, toalhaComDobras } from "./detalhes";
 
 // Mesas do salão: posição, se tem luminária acesa e quais lugares estão ocupados
 export const MESAS: Mesa[] = [
@@ -167,6 +168,9 @@ export function criarCenario(): Cenario {
     );
     grupo.add(luz);
     grupo.add(malha(new THREE.BoxGeometry(1.5, 0.08, 0.35), rebocoQuente, x, 4.05, 0.12));
+    const flores = floreira(1.25);
+    flores.position.set(x, 4.18, 0.2);
+    grupo.add(flores);
   });
 
   // toldo listrado inclinado, com franja
@@ -205,20 +209,22 @@ export function criarCenario(): Cenario {
     grupo.add(malha(new THREE.CylinderGeometry(0.015, 0.015, 0.35), ferro, x, 4.05, 0.18).rotateX(Math.PI / 2));
   });
 
-  // vasos com oliveiras ao lado da porta
-  [-1.05, 1.05].forEach((x, i) => {
-    const vaso = malha(torno([[0, 0], [0.26, 0], [0.32, 0.5], [0.35, 0.55], [0.3, 0.55], [0, 0.5]]), terracota, x, 0.15, 0.55);
-    const tronco = malha(new THREE.CylinderGeometry(0.03, 0.05, 1.1, 8), madeiraEscura, x, 1.15, 0.55);
-    grupo.add(vaso, tronco);
-    for (let k = 0; k < 26; k++) {
-      const copa = malha(new THREE.IcosahedronGeometry(0.11 + Math.random() * 0.09, 1), folhas,
-        x + (Math.random() - 0.5) * 0.55, 1.75 + Math.random() * 0.45, 0.55 + (Math.random() - 0.5) * 0.45);
-      grupo.add(copa);
-    }
-    animar.push((t) => {
-      tronco.rotation.z = Math.sin(t * 0.8 + i) * 0.015;
-    });
+  // oliveiras em vasos ao lado da porta (afastadas: a copa não invade a passagem)
+  [-1.42, 1.42].forEach((x) => {
+    const arv = oliveira(animar);
+    arv.position.set(x, 0.15, 0.6);
+    arv.rotation.y = x * 2.1;
+    grupo.add(arv);
   });
+
+  // Vespa estacionada na rua, em frente à trattoria
+  const moto = vespa();
+  moto.position.set(2.5, 0, 3.9);
+  moto.rotation.y = -0.45;
+  grupo.add(moto);
+
+  // sujeira e umidade na base da fachada
+  grupo.add(sujeiraFachada());
 
   // quadro-negro na calçada
   const quadro = new THREE.Group();
@@ -338,7 +344,9 @@ export function criarCenario(): Cenario {
   const mesa = (x: number, z: number, comLuz: boolean) => {
     const g = new THREE.Group();
     g.position.set(x, 0.15, z);
-    g.add(malha(new THREE.CylinderGeometry(0.56, 0.6, 0.32, 40, 1, true), toalha, 0, 0.6, 0));
+    const saia = toalhaComDobras(0.56, 0.34, toalha);
+    saia.position.y = 0.6;
+    g.add(saia);
     g.add(malha(new THREE.CylinderGeometry(0.56, 0.56, 0.02, 40), toalhaTampo, 0, 0.76, 0));
     [0, Math.PI].forEach((a) => {
       const c = new THREE.Group();

@@ -107,7 +107,7 @@ export class Motor {
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     // sombras suaves das lâmpadas
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.shadowMap.type = THREE.PCFShadowMap;
 
     this.cena.background = new THREE.Color(0x070a12);
     this.cena.fog = new THREE.FogExp2(0x0b0f1a, 0.022);

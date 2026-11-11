@@ -23,6 +23,51 @@ const sorte = () => {
 };
 const escolher = <T,>(lista: T[]) => lista[Math.floor(sorte() * lista.length)];
 
+// Rosto: olhos, nariz e orelhas; cabelo curto, comprido ou coque
+function detalharCabeca(cabeca: THREE.Group, pele: THREE.Material, cabelo: THREE.Material, estilo: number, bigode = false) {
+  const olho = new THREE.MeshStandardMaterial({ color: 0x1a120c, roughness: 0.3 });
+  [-1, 1].forEach((lado) => {
+    const o = new THREE.Mesh(new THREE.SphereGeometry(0.011, 8, 6), olho);
+    o.position.set(lado * 0.034, 0.018, 0.088);
+    cabeca.add(o);
+    const sobr = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.006, 0.008), cabelo);
+    sobr.position.set(lado * 0.034, 0.042, 0.09);
+    sobr.rotation.z = lado * -0.12;
+    cabeca.add(sobr);
+    const orelha = new THREE.Mesh(new THREE.SphereGeometry(0.022, 10, 8), pele);
+    orelha.scale.set(0.45, 1, 0.75);
+    orelha.position.set(lado * 0.094, 0.0, -0.005);
+    cabeca.add(orelha);
+  });
+  const nariz = new THREE.Mesh(new THREE.ConeGeometry(0.014, 0.04, 10), pele);
+  nariz.rotation.x = Math.PI / 2 + 0.25;
+  nariz.position.set(0, -0.005, 0.105);
+  cabeca.add(nariz);
+  if (bigode) {
+    const b = new THREE.Mesh(new THREE.CapsuleGeometry(0.008, 0.045, 4, 8), cabelo);
+    b.rotation.z = Math.PI / 2;
+    b.position.set(0, -0.035, 0.098);
+    cabeca.add(b);
+  }
+  // cabelo: calota que cobre topo e nuca
+  const calota = new THREE.Mesh(new THREE.SphereGeometry(0.114, 24, 16, 0, Math.PI * 2, 0, Math.PI * 0.58), cabelo);
+  calota.rotation.x = -0.55;
+  calota.position.set(0, 0.012, -0.01);
+  cabeca.add(calota);
+  if (estilo === 1) {
+    // comprido até os ombros
+    const longo = new THREE.Mesh(new THREE.CapsuleGeometry(0.1, 0.14, 6, 16), cabelo);
+    longo.scale.set(1.05, 1, 0.6);
+    longo.position.set(0, -0.09, -0.05);
+    cabeca.add(longo);
+  } else if (estilo === 2) {
+    // coque
+    const coque = new THREE.Mesh(new THREE.SphereGeometry(0.05, 14, 10), cabelo);
+    coque.position.set(0, 0.07, -0.1);
+    cabeca.add(coque);
+  }
+}
+
 // Pessoa sentada, olhando para +Z (o motor gira para encarar a mesa)
 function pessoaSentada(animar: Animavel[]) {
   const roupa = new THREE.MeshStandardMaterial({ color: escolher(ROUPAS), roughness: 0.85 });
@@ -46,10 +91,7 @@ function pessoaSentada(animar: Animavel[]) {
   const rosto = new THREE.Mesh(new THREE.SphereGeometry(0.105, 20, 16), pele);
   rosto.scale.set(0.9, 1.08, 0.95);
   cabeca.add(rosto);
-  const cab = new THREE.Mesh(new THREE.SphereGeometry(0.112, 20, 16, 0, Math.PI * 2, 0, Math.PI * (0.45 + sorte() * 0.2)), cabelo);
-  cab.rotation.x = -0.35;
-  cab.position.z = -0.01;
-  cabeca.add(cab);
+  detalharCabeca(cabeca, pele, cabelo, Math.floor(sorte() * 3));
   corpo.add(cabeca);
   // braços: ombro → antebraço apoiado na mesa
   const bracos: THREE.Group[] = [];
@@ -132,14 +174,13 @@ function garcom(animar: Animavel[], caminho: THREE.CatmullRomCurve3) {
   avental.rotation.y = Math.PI;
   (avental.material as THREE.MeshStandardMaterial).side = THREE.DoubleSide;
   g.add(avental);
-  const cabeca = new THREE.Mesh(new THREE.SphereGeometry(0.105, 20, 16), pele);
-  cabeca.scale.set(0.9, 1.08, 0.95);
+  const cabeca = new THREE.Group();
   cabeca.position.y = 1.62;
+  const rostoG = new THREE.Mesh(new THREE.SphereGeometry(0.105, 20, 16), pele);
+  rostoG.scale.set(0.9, 1.08, 0.95);
+  cabeca.add(rostoG);
+  detalharCabeca(cabeca, pele, cabelo, 0, true);
   g.add(cabeca);
-  const cab = new THREE.Mesh(new THREE.SphereGeometry(0.11, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.45), cabelo);
-  cab.position.y = 1.635;
-  cab.rotation.x = -0.3;
-  g.add(cab);
   // braço com a bandeja (dobrado, mão na altura do ombro)
   const ombroB = new THREE.Group();
   ombroB.position.set(0.22, 1.42, 0);
