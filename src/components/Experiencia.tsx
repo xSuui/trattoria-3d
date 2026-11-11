@@ -34,28 +34,20 @@ export default function Experiencia() {
   const [modoFoto, setModoFoto] = useState(false);
   const [somLigado, setSomLigado] = useState(false);
   const [sem3d, setSem3d] = useState(false);
+  const fundosRef = useRef<(HTMLImageElement | null)[]>([]);
 
   useEffect(() => {
     if (!canvasRef.current) return;
     const motor = criarMotor(canvasRef.current, () => setPronto(true));
     if (!motor) {
-      // sem 3D: mostra todos os textos (normalmente eles aparecem com a rolagem do 3D)
       setSem3d(true);
       setPronto(true);
-      secoesRef.current.forEach((s) => {
-        const bloco = s?.querySelector<HTMLElement>(".revelar");
-        if (bloco) {
-          bloco.style.opacity = "1";
-          bloco.style.transform = "none";
-        }
-      });
-      return;
     }
     motorRef.current = motor;
     const n = MARCACOES.length - 1;
 
     const foto = new URLSearchParams(window.location.search);
-    if (foto.has("p")) {
+    if (motor && foto.has("p")) {
       // ?p=0..5 : modo foto, vai direto para uma marcação
       setPronto(true);
       setModoFoto(true);
@@ -71,7 +63,11 @@ export default function Experiencia() {
       for (let i = 0; i < centros.length - 1; i++) {
         if (meio >= centros[i]) p = i + Math.min(1, (meio - centros[i]) / (centros[i + 1] - centros[i]));
       }
-      motor.setProgresso(p / n);
+      motor?.setProgresso(p / n);
+      // plano B sem 3D: as imagens das cenas trocam com a rolagem
+      fundosRef.current.forEach((img, i) => {
+        if (img) img.style.opacity = String(Math.max(0, 1 - Math.abs(p - i)));
+      });
       secoesRef.current.forEach((s, i) => {
         const bloco = s?.querySelector<HTMLElement>(".revelar");
         if (!bloco) return;
@@ -86,7 +82,7 @@ export default function Experiencia() {
     return () => {
       window.removeEventListener("scroll", aoRolar);
       window.removeEventListener("resize", aoRolar);
-      motor.destruir();
+      motor?.destruir();
     };
   }, []);
 
@@ -95,11 +91,26 @@ export default function Experiencia() {
       <canvas ref={canvasRef} className="fixed inset-0 h-screen w-screen" />
       <div className="pointer-events-none fixed inset-0 bg-gradient-to-r from-black/55 via-black/10 to-transparent" />
       {sem3d && (
-        <div className="fixed inset-0 flex items-end justify-end p-6 text-right">
-          <p className="max-w-xs rounded-xl bg-black/50 p-4 font-serif text-sm italic text-[#e9dccb]">
-            Seu navegador não conseguiu abrir o 3D. Tente atualizar a página ou ativar a aceleração de hardware nas configurações do navegador.
+        <>
+          <div className="fixed inset-0">
+            {SECOES.map((s, i) => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                key={s.id}
+                ref={(el) => {
+                  fundosRef.current[i] = el;
+                }}
+                src={`/fallback/cena-${i}.jpg`}
+                alt=""
+                className="absolute inset-0 h-full w-full object-cover transition-opacity duration-300"
+                style={{ opacity: i === 0 ? 1 : 0 }}
+              />
+            ))}
+          </div>
+          <p className="fixed right-4 bottom-4 z-20 max-w-xs rounded-lg bg-black/55 px-3 py-2 text-right text-xs text-neutral-300 backdrop-blur">
+            Versão em imagens: seu navegador não abriu o 3D. Para a experiência completa, ative a aceleração de hardware.
           </p>
-        </div>
+        </>
       )}
 
       <div
